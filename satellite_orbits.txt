@@ -1,0 +1,30 @@
+From Jacob.Askari@spacex.com, the planned Starlink constellations, and some OneWeb orbits
+
+Planned Starlink V1x
+alt inc_deg    total_planes    sats_plane    total_sats
+550    53    72    22    1584
+540    53.2    72    22    1584
+570    70    36    20    720
+560    97.6    6    58    348
+560    97.6    4    43    172
+            
+
+Planned Starlink V2x
+alt    inc_deg    total_planes    sats_plane    total_sats
+340    53    48    110    5280
+345    46    48    110    5280
+350    38    48    110    5280
+360    96.9    30    120    3600
+525    53    28    120    3360
+530    43    28    120    3360
+535    33    28    120    3360
+604    148    12    12    144
+614    115.7    18    18    324
+
+
+OneWeb Gen 2   
+Altitude    Inclination    nsat    nplane    nsat x nplane    Constellation    Total Sats
+1200    87.9    49    36    1764    
+1200    40    72    32    2304
+1200    55    72    32    2304
+    
