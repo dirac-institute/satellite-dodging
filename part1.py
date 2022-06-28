@@ -1,3 +1,35 @@
+import numpy as np 
+
+def bear(latA, lonA, latB, lonB):
+    """All radians
+    """
+    # BEAR Finds the bearing from one lat / lon point to another.
+    #bearing: The horizontal angle between the astronomic meridian and a line on the Earth
+    #the angle between 2 points on the sky. northpole is always at 0. How far to you have to rotate 
+    result = np.arctan2(np.sin(lonB - lonA) * np.cos(latB),
+                        np.cos(latA) * np.sin(latB) - np.sin(latA) * np.cos(latB) * np.cos(lonB - lonA)
+                        )
+
+    return result
+
+def _angularSeparation(long1, lat1, long2, lat2):
+    """
+    angle between 2 points
+    """
+    ## haversine distance 
+    #how far apart two points on the sky are 
+    t1 = np.sin(lat2/2.0 - lat1/2.0)**2
+    t2 = np.cos(lat1)*np.cos(lat2)*np.sin(long2/2.0 - long1/2.0)**2
+    _sum = t1 + t2
+
+    if np.size(_sum) == 1:
+        if _sum < 0.0:
+            _sum = 0.0
+    else:
+        _sum = np.where(_sum < 0.0, 0.0, _sum)
+
+    return 2.0*np.arcsin(np.sqrt(_sum))
+    
 
 def pointToLineDistance(lon1, lat1, lon2, lat2, lon3, lat3):
     """All radians
