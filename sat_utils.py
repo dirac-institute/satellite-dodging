@@ -6,6 +6,7 @@ from astropy import constants as const
 
 
 MJDOFFSET = 2400000.5
+MJD0 = 60218  # is 23274 for a TLE via http://www.decimaltime.hynes.net/p/conversions.html
 
 
 def satellite_mean_motion(altitude, mu=const.GM_earth, r_earth=const.R_earth):
@@ -29,6 +30,8 @@ def tle_from_orbital_parameters(sat_name, sat_nr, epoch, inclination, raan,
     '''
 
     # Note: RAAN = right ascention (or longitude) of ascending node
+
+    # I suspect this is filling in 0 eccentricity everywhere.
 
     def checksum(line):
         s = 0
@@ -54,7 +57,11 @@ def tle_from_orbital_parameters(sat_name, sat_nr, epoch, inclination, raan,
 
 
 def create_constellation(altitudes, inclinations, nplanes, sats_per_plane,
-                         epoch=22050.1, name='Test', seed=42):
+                         epoch=23274., name='Test', seed=42):
+    """Create a set of orbital elements for a satellite constellation then
+    convert them to TLEs.
+    """
+
 
     rng = np.random.default_rng(seed)
 
@@ -99,19 +106,49 @@ def starlink_constellation_v1():
     return my_sat_tles
 
 
+def starlink_constellation_v2():
+    """
+    Create a list of satellite TLE's
+    """
+    altitudes = np.array([340, 345, 350, 360, 525, 530, 535, 604, 614]) * u.km
+    inclinations = np.array([53, 46, 38, 96.9, 53, 43, 33, 148, 115.7]) * u.deg
+    nplanes = np.array([48, 48, 48, 30, 28, 28, 28, 12, 18])
+    sats_per_plane = np.array([110, 110, 110, 120, 120, 120, 120, 12, 18])
+
+    my_sat_tles = create_constellation(altitudes, inclinations, nplanes, sats_per_plane, name="starV1")
+
+    return my_sat_tles
+
+
+def oneweb_constellation():
+    """
+    Create a list of satellite TLE's
+    """
+    altitudes = np.array([1200, 1200, 1200]) * u.km
+    inclinations = np.array([87.9, 40, 55]) * u.deg
+    nplanes = np.array([49, 72, 72])
+    sats_per_plane = np.array([36, 32, 32])
+
+    my_sat_tles = create_constellation(altitudes, inclinations, nplanes, sats_per_plane, name="starV1")
+
+    return my_sat_tles
+
+
 class Constellation(object):
     """
-    Have a class to hold ephem satellite objects
+    Have a class to hold satellite constellation
 
     Parameters
     ----------
     sat_tle_list : list of str
         A list of satellite TLEs to be used
-    tstep : float (5)
-        The time step to use when computing satellite positions in an exposure
+    alt_limit : float (15)
+        Altitude limit below which satellites can be ignored (degrees)
+    fov : float (3.5)
+        The field of view diameter (degrees)
     """
 
-    def __init__(self, sat_tle_list, alt_limit=15., fov=3.5, mjd0=60218.):
+    def __init__(self, sat_tle_list, alt_limit=20., fov=3.5):
         self.alt_limit_rad = np.radians(alt_limit)
         self.fov_radius_rad = np.radians(fov/2.)
 
@@ -162,9 +199,7 @@ class Constellation(object):
         # Keep track of the ones that are up and illuminated
         self.visible = np.where((self.altitudes_rad >= self.alt_limit_rad) & (self.illum == True))[0]
 
-
     def paths_array(mjds):
         """Maybe pass in an arary of MJD vallues and return the RA,Dec (and illumination) arrays for each satellite
         """
         pass
-        
