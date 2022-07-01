@@ -192,7 +192,9 @@ class Constellation(object):
 
     def update_mjd(self, mjd):
         """
-        observer : ephem.Observer object
+        Record the alt,az position and illumination status for all the satellites at a given time
+
+        XXX--need to update so this will work with an array of MJD values, so we can avoid mjd loops.
         """
         jd = mjd + MJDOFFSET
         t = self.ts.ut1_jd(jd)
@@ -221,6 +223,21 @@ class Constellation(object):
             (self.altitudes_rad >= self.alt_limit_rad) & (self.illum == True)
         )[0]
 
-    def paths_array(mjds):
-        """Maybe pass in an arary of MJD vallues and return the RA,Dec (and illumination) arrays for each satellite"""
-        pass
+    def paths_array(self, mjds):
+        """Maybe pass in an arary of MJD values and return the RA,Dec (and illumination) arrays for each satellite"""
+        
+        jd = mjds + MJDOFFSET
+        t = self.ts.ut1_jd(jd)
+
+        ras = []
+        decs = []
+        illums = []
+        for sat in self.sat_list:
+            current_sat = sat.at(t)
+            illum = current_sat.is_sunlit(self.eph)
+            illums.append(illum.copy())
+            topo = current_sat - self.observatory_site.at(t)
+            ra, dec, distance = topo.radec()
+            ras.append(ra)
+            decs.append(dec)
+        return ras, dec, illums
