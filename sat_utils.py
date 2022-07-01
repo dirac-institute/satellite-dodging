@@ -108,7 +108,8 @@ def create_constellation(
 
 def starlink_constellation_v1():
     """
-    Create a list of satellite TLE's
+    Create a list of satellite TLE's. 
+    For starlink v1 (as of July 2022). Should create 4,408 orbits
     """
     altitudes = np.array([550, 540, 570, 560, 560]) * u.km
     inclinations = np.array([53, 53.2, 70, 97.6, 97.6]) * u.deg
@@ -125,6 +126,7 @@ def starlink_constellation_v1():
 def starlink_constellation_v2():
     """
     Create a list of satellite TLE's
+    For starlink v2 (as of July 2022). Should create 29,988 orbits
     """
     altitudes = np.array([340, 345, 350, 360, 525, 530, 535, 604, 614]) * u.km
     inclinations = np.array([53, 46, 38, 96.9, 53, 43, 33, 148, 115.7]) * u.deg
@@ -141,6 +143,7 @@ def starlink_constellation_v2():
 def oneweb_constellation():
     """
     Create a list of satellite TLE's
+    for OneWeb plans (as of July 2022). Should create 6,372 orbits
     """
     altitudes = np.array([1200, 1200, 1200]) * u.km
     inclinations = np.array([87.9, 40, 55]) * u.deg
@@ -224,7 +227,8 @@ class Constellation(object):
         )[0]
 
     def paths_array(self, mjds):
-        """Maybe pass in an arary of MJD values and return the RA,Dec (and illumination) arrays for each satellite"""
+        """For an array of MJD values, compute the resulting RA,Dec and illumination status of 
+        the full constellation at each MJD."""
         
         jd = mjds + MJDOFFSET
         t = self.ts.ut1_jd(jd)
@@ -238,6 +242,6 @@ class Constellation(object):
             illums.append(illum.copy())
             topo = current_sat - self.observatory_site.at(t)
             ra, dec, distance = topo.radec()
-            ras.append(ra)
-            decs.append(dec)
-        return ras, dec, illums
+            ras.append(ra.radians)
+            decs.append(dec.radians)
+        return np.vstack(ras), np.vstack(decs), np.vstack(illums)
