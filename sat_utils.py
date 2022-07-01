@@ -108,7 +108,8 @@ def create_constellation(
 
 def starlink_constellation_v1():
     """
-    Create a list of satellite TLE's
+    Create a list of satellite TLE's. 
+    For starlink v1 (as of July 2022). Should create 4,408 orbits
     """
     altitudes = np.array([550, 540, 570, 560, 560]) * u.km
     inclinations = np.array([53, 53.2, 70, 97.6, 97.6]) * u.deg
@@ -125,6 +126,7 @@ def starlink_constellation_v1():
 def starlink_constellation_v2():
     """
     Create a list of satellite TLE's
+    For starlink v2 (as of July 2022). Should create 29,988 orbits
     """
     altitudes = np.array([340, 345, 350, 360, 525, 530, 535, 604, 614]) * u.km
     inclinations = np.array([53, 46, 38, 96.9, 53, 43, 33, 148, 115.7]) * u.deg
@@ -141,6 +143,7 @@ def starlink_constellation_v2():
 def oneweb_constellation():
     """
     Create a list of satellite TLE's
+    for OneWeb plans (as of July 2022). Should create 6,372 orbits
     """
     altitudes = np.array([1200, 1200, 1200]) * u.km
     inclinations = np.array([87.9, 40, 55]) * u.deg
@@ -192,7 +195,9 @@ class Constellation(object):
 
     def update_mjd(self, mjd):
         """
-        observer : ephem.Observer object
+        Record the alt,az position and illumination status for all the satellites at a given time
+
+        XXX--need to update so this will work with an array of MJD values, so we can avoid mjd loops.
         """
         jd = mjd + MJDOFFSET
         t = self.ts.ut1_jd(jd)
@@ -221,6 +226,22 @@ class Constellation(object):
             (self.altitudes_rad >= self.alt_limit_rad) & (self.illum == True)
         )[0]
 
-    def paths_array(mjds):
-        """Maybe pass in an arary of MJD vallues and return the RA,Dec (and illumination) arrays for each satellite"""
-        pass
+    def paths_array(self, mjds):
+        """For an array of MJD values, compute the resulting RA,Dec and illumination status of 
+        the full constellation at each MJD."""
+        
+        jd = mjds + MJDOFFSET
+        t = self.ts.ut1_jd(jd)
+
+        ras = []
+        decs = []
+        illums = []
+        for sat in self.sat_list:
+            current_sat = sat.at(t)
+            illum = current_sat.is_sunlit(self.eph)
+            illums.append(illum.copy())
+            topo = current_sat - self.observatory_site.at(t)
+            ra, dec, distance = topo.radec()
+            ras.append(ra.radians)
+            decs.append(dec.radians)
+        return np.vstack(ras), np.vstack(decs), np.vstack(illums)
