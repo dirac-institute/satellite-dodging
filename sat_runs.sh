@@ -2,3 +2,17 @@ python satellite_sim.py --sat_weight 0 --constellation_name starlink_constellati
 python satellite_sim.py --sat_weight .1 --constellation_name starlink_constellation_v1 --survey_length 365
 python satellite_sim.py --sat_weight 1 --constellation_name starlink_constellation_v1 --survey_length 365
 python satellite_sim.py --sat_weight 5 --constellation_name starlink_constellation_v1 --survey_length 365
+python satellite_sim.py --sat_weight 10 --constellation_name starlink_constellation_v1 --survey_length 365
+python satellite_sim.py --sat_weight 500 --constellation_name starlink_constellation_v1 --survey_length 365
+python satellite_sim.py --sat_weight 0 --constellation_name starlink_constellation_v2 --survey_length 365
+python satellite_sim.py --sat_weight .1 --constellation_name starlink_constellation_v2 --survey_length 365
+python satellite_sim.py --sat_weight 1 --constellation_name starlink_constellation_v2 --survey_length 365
+python satellite_sim.py --sat_weight 5 --constellation_name starlink_constellation_v2 --survey_length 365
+python satellite_sim.py --sat_weight 10 --constellation_name starlink_constellation_v2 --survey_length 365
+python satellite_sim.py --sat_weight 500 --constellation_name starlink_constellation_v2 --survey_length 365
+python satellite_sim.py --sat_weight 0 --constellation_name oneweb_constellation --survey_length 365
+python satellite_sim.py --sat_weight .1 --constellation_name oneweb_constellation --survey_length 365
+python satellite_sim.py --sat_weight 1 --constellation_name oneweb_constellation --survey_length 365
+python satellite_sim.py --sat_weight 5 --constellation_name oneweb_constellation --survey_length 365
+python satellite_sim.py --sat_weight 10 --constellation_name oneweb_constellation --survey_length 365
+python satellite_sim.py --sat_weight 500 --constellation_name oneweb_constellation --survey_length 365
