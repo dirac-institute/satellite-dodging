@@ -9,6 +9,7 @@ from rubin_sim.utils import (
     _angularSeparation,
     _approx_altaz2pa,
     survey_start_mjd,
+    _healbin
 )
 import rubin_sim.skybrightness_pre as sb
 import healpy as hp
@@ -48,6 +49,10 @@ class Model_observatory(object):
         seeing_db=None,
         park_after=10.0,
         init_load_length=10,
+        sat_nside=64,
+        satelite_dt=10.,
+        constellation=None,
+        alt_limit=20.
     ):
         """
         Parameters
@@ -71,12 +76,17 @@ class Model_observatory(object):
         init_load_length : int (10)
             The length of pre-scheduled sky brighntess to load initially (days).
         """
+        self.alt_limit = np.radians(alt_limit)
+        self.satelite_dt = satelite_dt/3600./24.  # Seconds to days
+        self.sat_nside = sat_nside
+        self.constellation = constellation
 
         if nside is None:
             nside = set_default_nside()
         self.nside = nside
 
         self.cloud_limit = cloud_limit
+        self.night = -666
 
         self.alt_min = np.radians(alt_min)
         self.lax_dome = lax_dome
@@ -302,10 +312,8 @@ class Model_observatory(object):
         self.conditions.planet_positions = self.almanac.get_planet_positions(self.mjd)
 
         # Spot to put in satellite streak prediction maps
-        # XXX--probably have some class that looks up the remaining 
-        # streaks in a night and passes that along
-        self.conditions.satellite_mjds = np.array([0])
-        self.conditions.satellite_maps = 0.
+        self.conditions.satellite_mjds = self.sat_mjds
+        self.conditions.satellite_maps = self.satellite_maps
 
         # See if there are any ToOs to include
         if self.sim_ToO is not None:
@@ -323,7 +331,46 @@ class Model_observatory(object):
     def mjd(self, value):
         self._mjd = value
         self.almanac_indx = self.almanac.mjd_indx(value)
-        self.night = self.almanac.sunsets["night"][self.almanac_indx]
+        # Update night if needed
+        if self.almanac.sunsets["night"][self.almanac_indx] != self.night:
+            self.night = self.almanac.sunsets["night"][self.almanac_indx]
+            # Update the satellite prediction map for the night
+            self._update_satellite_maps()
+
+    def _update_satellite_maps(self):
+        """Make the satellite prediction maps for the night
+
+        will set self.sat_mjds and self.satellite_maps that can then be attached to
+        a conditions object.
+        """
+        sunset = self.almanac.sunsets["sun_n12_setting"][
+            self.almanac_indx
+        ]
+        sunrise = self.almanac.sunsets["sun_n12_rising"][
+            self.almanac_indx
+        ]
+
+        self.sat_mjds = np.arange(sunset, sunrise, self.satelite_dt)
+
+        # Compute RA and decs for when sun is down
+        ras, decs, alts, illums = self.constellation.paths_array(self.sat_mjds)
+
+        below_limit = np.where(alts < self.alt_limit)
+
+        weights = np.zeros(ras.shape, dtype=int)
+        weights[illums] = 1
+        weights[below_limit] = 0
+
+        satellite_maps = []
+        for i, mjd in enumerate(self.sat_mjds):
+
+            spot_map = _healbin(ras[:,i][illums[:,i]], decs[:,i][illums[:,i]],
+                                weights[:,i][illums[:,i]], self.sat_nside, reduceFunc=np.sum, dtype=int,
+                                fillVal=0)
+                
+            satellite_maps.append(spot_map)
+
+        self.satellite_maps = np.vstack(satellite_maps)
 
     def observation_add_data(self, observation):
         """
