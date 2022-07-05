@@ -60,7 +60,7 @@ def gen_greedy_surveys(nside=32, nexp=2, exptime=30., filters=['r', 'i', 'z', 'y
                        camera_rot_limits=[-80., 80.],
                        shadow_minutes=60., max_alt=76., moon_distance=30., ignore_obs='DD',
                        m5_weight=3., footprint_weight=0.75, slewtime_weight=3.,
-                       stayfilter_weight=3., repeat_weight=-1., footprints=None):
+                       stayfilter_weight=3., repeat_weight=-1., footprints=None, sat_weight=0):
     """
     Make a quick set of greedy surveys
 
@@ -118,6 +118,8 @@ def gen_greedy_surveys(nside=32, nexp=2, exptime=30., filters=['r', 'i', 'z', 'y
         bfs.append((bf.Strict_filter_basis_function(filtername=filtername), stayfilter_weight))
         bfs.append((bf.Visit_repeat_basis_function(gap_min=0, gap_max=18*60., filtername=None,
                                                    nside=nside, npairs=20), repeat_weight))
+        # Avoid satellite streaks
+        bfs.append((Satellite_avoid_basis_function(nside=nside, forecast_time=exptime), sat_weight))
         # Masks, give these 0 weight
         bfs.append((bf.Zenith_shadow_mask_basis_function(nside=nside, shadow_minutes=shadow_minutes,
                                                          max_alt=max_alt), 0))
@@ -581,13 +583,16 @@ if __name__ == "__main__":
                         detailers.Euclid_dither_detailer(), u_detailer]
     ddfs = ddf_surveys(detailers=details, season_frac=ddf_season_frac)
 
-    greedy = gen_greedy_surveys(nside, nexp=nexp, footprints=footprints)
+    greedy = gen_greedy_surveys(nside, nexp=nexp, footprints=footprints, sat_weight=sat_weight)
 
-    blobs = generate_blobs(nside, nexp=nexp, footprints=footprints, mjd_start=conditions.mjd_start, good_seeing_weight=gsw)
+    blobs = generate_blobs(nside, nexp=nexp, footprints=footprints,
+                           mjd_start=conditions.mjd_start, good_seeing_weight=gsw,
+                           sat_weight=sat_weight)
     twi_blobs = generate_twi_blobs(nside, nexp=nexp,
                                    footprints=footprints,
                                    wfd_footprint=wfd_footprint,
-                                   repeat_night_weight=repeat_night_weight)
+                                   repeat_night_weight=repeat_night_weight,
+                                   sat_weight=sat_weight)
     surveys = [ddfs, blobs, twi_blobs, greedy]
     run_sched(surveys, survey_length=survey_length, verbose=verbose,
               fileroot=os.path.join(outDir, fileroot+file_end), extra_info=extra_info,
