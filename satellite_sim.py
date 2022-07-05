@@ -50,7 +50,8 @@ class Satellite_avoid_basis_function(bf.Base_basis_function):
             result = hp.smoothing(result, fwhm=self.smooth_fwhm)
             result = hp.ud_grade(result, self.nside)
             result[np.where(result < 0)] = 0
-        
+            # Make it negative, so positive weights will result in avoiding satellites
+            result *= -1
 
         return result
 
