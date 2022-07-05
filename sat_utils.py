@@ -288,16 +288,14 @@ class Constellation(object):
         finAz_list = self.azimuth_rad + 0
 
         for index in self.visible: 
-            elem_list = list(zip(inAlt_list, inAz_list, finAlt_list, finAz_list))[index]
-            initial_alt = elem_list[0]
-            initial_az = elem_list[1]
-            end_alt = elem_list[2]
-            end_az = elem_list[3]
-
-            distance = pointToLineDistance(initial_alt, initial_az, end_alt, end_az, pointing_alt, pointing_az)
+            distance = pointToLineDistance(inAlt_list[index], inAz_list[index],
+                                           finAlt_list[index], finAz_list[index], 
+                                           pointing_alt, pointing_az)
 
             if distance < fov_radius:
-                streak_len_rad += calculate_length(initial_alt, initial_az, end_alt, end_az, pointing_alt, pointing_az, fov_radius)
+                streak_len_rad += calculate_length(inAlt_list[index], inAz_list[index],
+                                                   finAlt_list[index], finAz_list[index],
+                                                   pointing_alt, pointing_az, fov_radius)
                 n_streaks += 1
         return np.degrees(streak_len_rad), n_streaks
 
