@@ -3,6 +3,9 @@ from rubin_sim.utils import gnomonic_project_toxy, _angularSeparation, Site
 from skyfield.api import load, wgs84, EarthSatellite
 from astropy import units as u
 from astropy import constants as const
+from part1 import pointToLineDistance
+from shapely.geometry import LineString, Point
+from shapely import geometry
 
 
 MJDOFFSET = 2400000.5
@@ -248,3 +251,111 @@ class Constellation(object):
             decs.append(dec.radians)
             alts.append(alt.radians)
         return np.vstack(ras), np.vstack(decs), np.vstack(alts), np.vstack(illums)
+
+    def check_pointing(self, pointing_alt, pointing_az, mjd, exposure_time, fov_radius=1.75):
+        """Calculates the length of satellite streaks in a pointing. 
+        Parameters
+        ----------
+        Param1 : float 
+            the altitude of the pointing (degrees).
+        Param2 : float
+            the azimuth of the pointing (degrees).
+        Param3 : float
+            the current mjd (days).
+        Param4: float 
+            the length of exposure (seconds).
+        fov_radius : float (1.75)
+            The radius of the field of view (degrees), default 1.75.
+        Returns
+        -------
+        list
+            list of streak length in the given pointing (degrees)
+            and the number of satellites that contributed to the length"""
+        
+        fov_radius = np.radians(fov_radius)
+        pointing_alt = np.radians(pointing_alt)
+        pointing_az = np.radians(pointing_az)
+        exposure_time = exposure_time/86400
+        streak_len_rad = 0.
+        n_streaks = 0
+
+        self.update_mjd(mjd)
+        inAlt_list = self.altitudes_rad + 0
+        inAz_list = self.azimuth_rad + 0
+        
+        self.update_mjd(mjd+exposure_time)
+        finAlt_list = self.altitudes_rad + 0 
+        finAz_list = self.azimuth_rad + 0
+
+        for index in self.visible: 
+            elem_list = list(zip(inAlt_list, inAz_list, finAlt_list, finAz_list))[index]
+            initial_alt = elem_list[0]
+            initial_az = elem_list[1]
+            end_alt = elem_list[2]
+            end_az = elem_list[3]
+
+            distance = pointToLineDistance(initial_alt, initial_az, end_alt, end_az, pointing_alt, pointing_az)
+
+            if distance < fov_radius:
+                streak_len_rad += calculate_length(initial_alt, initial_az, end_alt, end_az, pointing_alt, pointing_az, fov_radius)
+                n_streaks += 1
+        return np.degrees(streak_len_rad), n_streaks
+
+
+def calculate_length(initial_alt, initial_az, end_alt, end_az, pointing_alt, pointing_az, radius):
+    """Helper funciton for check_pointing. 
+    calculate the length of a streak after projecting the locations of the satellite and the pointing onto 2D.
+    Parameters
+    ----------
+    Param1 : float 
+        the initial altitude of the satellite (radians)
+    Param2 : float
+        the initial azimuth of the satellite (radians)
+    Param3 : float
+        the end altitude of the satellite (radians)
+    Param4: float 
+        the end azimuth of the satellite (radians)
+    Param5 : float
+        the altitude of the pointing (radians)
+    Param6: float 
+        the azimuth of the pointing(radians)
+    Param7 : float
+        the radius of the pointing (radians)
+    Returns
+    -------
+    float
+        the length of the satellite streak in the pointing (radians)
+    """
+    #start location 
+    x1,y1=gnomonic_project_toxy(initial_alt, initial_az, pointing_alt, pointing_az)
+    #end location
+    x2,y2=gnomonic_project_toxy(end_alt, end_az, pointing_alt, pointing_az)
+
+    # create your two points
+    point_1 = geometry.Point(x1, y1)
+    point_2 = geometry.Point(x2, y2)
+    
+    #from https://stackoverflow.com/questions/30844482/what-is-most-efficient-way-to-find-the-intersection-of-a-line-and-a-circle-in-py
+    p = Point(0, 0)
+    circle = p.buffer(radius).boundary
+    circle_buffer=p.buffer(radius)
+    line = LineString([(x1,y1), (x2,y2)])
+    intersection = circle.intersection(line)
+    try:
+        if circle_buffer.contains(point_1) and circle_buffer.contains(point_2): 
+            len=np.sqrt((x1-x2)**2+(y1-y2)**2)
+        elif circle_buffer.contains(point_1):
+            x_2=intersection.coords[0][0]
+            y_2=intersection.coords[0][1]
+            len=np.sqrt((x1-x_2)**2+(y1-y_2)**2)
+        elif circle_buffer.contains(point_2):
+            x_1=intersection.coords[0][0]
+            y_1=intersection.coords[0][1]
+            len=np.sqrt((x_1-x2)**2+(y_1-y2)**2)
+        else:  
+            p1=intersection.geoms[0].coords[0]
+            p2=intersection.geoms[1].coords[0]
+            len=np.sqrt((p1[0]-p2[0])**2+(p1[1]-p2[1])**2)
+        return len 
+    except:
+        return 0
