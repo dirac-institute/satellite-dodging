@@ -235,6 +235,7 @@ class Constellation(object):
 
         ras = []
         decs = []
+        alts = []
         illums = []
         for sat in self.sat_list:
             current_sat = sat.at(t)
@@ -242,6 +243,8 @@ class Constellation(object):
             illums.append(illum.copy())
             topo = current_sat - self.observatory_site.at(t)
             ra, dec, distance = topo.radec()
+            alt, az, dist = topo.altaz()
             ras.append(ra.radians)
             decs.append(dec.radians)
-        return np.vstack(ras), np.vstack(decs), np.vstack(illums)
+            alts.append(alt.radians)
+        return np.vstack(ras), np.vstack(decs), np.vstack(alts), np.vstack(illums)
