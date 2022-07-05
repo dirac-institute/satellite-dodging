@@ -6,6 +6,10 @@ from rubin_sim.utils import Site
 import ephem
 from rubin_sim.utils import _angularSeparation, _buildTree, xyz_angular_radius
 from rubin_sim.scheduler.utils import read_fields
+from astropy import constants as const
+from astropy import units as u
+from astropy import time
+from shapely import geometry
 
 def satellite_mean_motion(altitude, mu=const.GM_earth, r_earth=const.R_earth):
     '''
@@ -78,6 +82,43 @@ def create_constellation(altitudes, inclinations, nplanes, sats_per_plane, epoch
 
     return my_sat_tles
 
+def starlink_constellation(supersize=False, fivek=False):
+    """
+    Create a list of satellite TLE's
+    """
+    altitudes = np.array([550, 1110, 1130, 1275, 1325, 345.6, 340.8, 335.9])
+    inclinations = np.array([53.0, 53.8, 74.0, 81.0, 70.0, 53.0, 48.0, 42.0])
+    nplanes = np.array([72, 32, 8, 5, 6, 2547, 2478, 2493])
+    sats_per_plane = np.array([22, 50, 50, 75, 75, 1, 1, 1])
+
+    if supersize:
+        # Let's make 4 more altitude and inclinations
+        new_altitudes = []
+        new_inclinations = []
+        new_nplanes = []
+        new_sat_pp = []
+        for i in np.arange(0, 4):
+            new_altitudes.append(altitudes+i*20)
+            new_inclinations.append(inclinations+3*i)
+            new_nplanes.append(nplanes)
+            new_sat_pp.append(sats_per_plane)
+
+        altitudes = np.concatenate(new_altitudes)
+        inclinations = np.concatenate(new_inclinations)
+        nplanes = np.concatenate(new_nplanes)
+        sats_per_plane = np.concatenate(new_sat_pp)
+
+    altitudes = altitudes * u.km
+    inclinations = inclinations * u.deg
+    my_sat_tles = create_constellation(altitudes, inclinations, nplanes, sats_per_plane, name='Starl')
+
+    if fivek:
+        stride = round(len(my_sat_tles)/5000)
+        my_sat_tles = my_sat_tles[::stride]
+
+    return my_sat_tles
+
+
 class Constellation(object):
     """
     Have a class to hold ephem satellite objects
@@ -144,7 +185,7 @@ class Constellation(object):
     def update_mjd(self, mjd, indx=None):
         """
         mjd : float
-            The MJD to advance the satellites to
+            The MJD to advance the satellites to (days)
         indx : list-like of ints
             Only propigate a subset of satellites. 
         """
@@ -175,100 +216,126 @@ class Constellation(object):
         self.eclip = np.array(self.eclip)
         # Keep track of the ones that are up and illuminated
         self.above_alt_limit = np.where((self.altitudes_rad >= self.alt_limit_rad) & (self.eclip == False))[0]
-
-
-
-
-##numpy doc docstring 
-def check_pointing(self, pointing_alt, pointing_az, mjd, exposure_time):
-    """Calculates the length of satellite streaks in a pointing. 
-    Parameters
-    ----------
-    Param1 : float 
-        the altitude of the pointing
-    Param2 : float
-        the azimuth of the pointing
-    Param3 : float
-        the current mjd
-    Param4: float 
-        the length of exposure.
-
-    Returns
-    -------
-    list
-        list of streak length in the given pointing"""
-    streak_len=[]
-    sat_list=self.sat_list
-    self.update_mjd(mjd)
-    inLat_list=self.latitude
-    inLong_list=self.longtitude
-    initialPositions=zip(inLat_list,inLong_list)
-    self.updata_mjd(mjd+exposure_time)
-    finLat_list=self.latitude
-    finLong_list=self.longtitude   
-    endPositions=zip(finLat_list,finLong_list)
-    for i in range(len(initialPositions)):
-        initial_lat, initial_lon=initialPositions[i]
-        end_lat, end_lon = endPositions[i]
-        distance=pointToLineDistance(initial_lat, initial_lon, end_lat, end_lon, pointing_alt, pointing_az)
-        print(distance)
-        print(self.radius)
-        if distance<self.radius:
-            streak=calculate_length(initial_lat, initial_lon, end_lat, end_lon, pointing_alt, pointing_az, self.radius)
-            streak_len.append(streak)
-
-
-
     
 
-def calculate_length(initial_lat, initial_lon, end_lat, end_lon, pointing_alt, pointing_az, radius ):
+
+    def check_pointing(self, pointing_alt, pointing_az, mjd, exposure_time, fov_radius=1.75):
+        """Calculates the length of satellite streaks in a pointing. 
+        Parameters
+        ----------
+        Param1 : float 
+            the altitude of the pointing (degrees).
+        Param2 : float
+            the azimuth of the pointing (degrees).
+        Param3 : float
+            the current mjd (days).
+        Param4: float 
+            the length of exposure (seconds).
+        fov_radius : float (1.75)
+            The radius of the field of view (degrees), default 1.75.
+
+        Returns
+        -------
+        list
+            list of streak length in the given pointing"""
+        
+        fov_radius = np.radians(fov_radius)
+        pointing_alt=np.radians(pointing_alt)
+        pointing_az=np.radians(pointing_az)
+        exposure_time=exposure_time/86400
+        streak_len=[]
+
+        self.update_mjd(mjd)
+        inAlt_list=self.altitudes_rad + 0
+        inAz_list=self.azimuth_rad + 0
+        
+        self.update_mjd(mjd+exposure_time)
+        finAlt_list=self.altitudes_rad + 0 
+        finAz_list=self.azimuth_rad + 0
+
+        
+        for index in self.above_alt_limit: 
+            elem_list=list(zip(inAlt_list, inAz_list, finAlt_list, finAz_list))[index]
+            initial_alt=elem_list[0]
+            initial_az=elem_list[1]
+            end_alt=elem_list[2]
+            end_az=elem_list[3]
+
+            distance=pointToLineDistance(initial_alt, initial_az, end_alt, end_az, pointing_alt, pointing_az)
+
+            if distance<fov_radius:
+                streak=calculate_length(initial_alt, initial_az, end_alt, end_az, pointing_alt, pointing_az, fov_radius)
+                streak_len.append(streak)
+        return streak_len
+
+
+def calculate_length(initial_alt, initial_az, end_alt, end_az, pointing_alt, pointing_az, radius ):
     """Helper funciton for check_pointing. 
     calculate the length of a streak after projecting the locations of the satellite and the pointing onto 2D.
     Parameters
     ----------
     Param1 : float 
-        the initial latitude of the satellite
+        the initial altitude of the satellite (degree)
     Param2 : float
-        the initial longitude of the satellite
+        the initial azimuth of the satellite (degree)
     Param3 : float
-        the end latitude of the satellite
+        the end altitude of the satellite (degree)
     Param4: float 
-        the end longitude of the satellite
+        the end azimuth of the satellite (degree)
     Param5 : float
-        the altitude of the pointing 
+        the altitude of the pointing (degree)
     Param6: float 
-        the azimuth of the pointing
+        the azimuth of the pointing(degree)
     Param7 : float
-        the radius of the pointing 
+        the radius of the pointing (degree)
 
 
     Returns
     -------
     float
-        the length of the satellite streak in the pointing 
+        the length of the satellite streak in the pointing (not sure what the unit should be -- degrees? meters?)
     """
     #stsart location 
-    x1,y1=gnomonic_project_toxy(initial_lat, initial_lon, pointing_alt, pointing_az)
+    x1,y1=gnomonic_project_toxy(initial_alt, initial_az, pointing_alt, pointing_az)
     #end location
-    x2,y2=gnomonic_project_toxy(end_lat, end_lon, pointing_alt, pointing_az)
-    #center of pointing 
-    x_c,y_c=gnomonic_project_toxy(pointing_alt, pointing_az, pointing_alt, pointing_az)
-    #TODO: so is radius just the old radius?? 
+    x2,y2=gnomonic_project_toxy(end_alt, end_az, pointing_alt, pointing_az)
 
+    # create your two points
+    point_1 = geometry.Point(x1, y1)
+    point_2 = geometry.Point(x2, y2)
+    
 
     #from https://stackoverflow.com/questions/30844482/what-is-most-efficient-way-to-find-the-intersection-of-a-line-and-a-circle-in-py
-    p = Point(x_c,y_c)
+    p = Point(0, 0)
     circle = p.buffer(radius).boundary
+    circle_buffer=p.buffer(radius)
     line = LineString([(x1,y1), (x2,y2)])
-    i = circle.intersection(line)
+    intersection = circle.intersection(line)
+    try:
+        if circle_buffer.contains(point_1) and circle_buffer.contains(point_2): 
+            len=np.sqrt((x1-x2)**2+(y1-y2)**2)
+            return len 
+        elif circle_buffer.contains(point_1):
+            x_2=intersection.coords[0][0]
+            y_2=intersection.coords[0][1]
+            len=np.sqrt((x1-x_2)**2+(y1-y_2)**2)
+            return len 
+        elif circle_buffer.contains(point_2):
+            x_1=intersection.coords[0][0]
+            y_1=intersection.coords[0][1]
+            len=np.sqrt((x_1-x2)**2+(y_1-y2)**2) 
+            return len  
+        else:  
+            p1=intersection.geoms[0].coords[0]
+            p2=intersection.geoms[1].coords[0]
+            len=np.sqrt((p1[0]-p2[0])**2+(p1[1]-p2[1])**2)
+            return len 
+    except:
+            print(f"edge case: line: {line}, radius: {radius}, intersection: {intersection}")
+            pass
 
-    p1=i.geoms[0].coords[0]
-    p2=i.geoms[1].coords[0]
 
-    len=np.sqrt(p1**2+p2**2)
 
-    
-    return len 
 
 
 
@@ -280,13 +347,13 @@ def gnomonic_project_toxy(RA1, Dec1, RAcen, Deccen):
     Parameters
     ----------
     Param1 : float 
-        the right ascension of the object
+        the right ascension of the object (degrees)
     Param2 : float
-        the declination of the object
+        the declination of the object (degrees)
     Param3 : float
-        the right ascension of the center of the system
+        the right ascension of the center of the system (degrees)
     Param4: float 
-        the declination of the center of the system
+        the declination of the center of the system (degrees)
 
 
 
