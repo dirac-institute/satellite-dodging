@@ -20,6 +20,8 @@ import argparse
 from make_ddf_survey import generate_ddf_scheduled_obs
 # So things don't fail on hyak
 from astropy.utils import iers
+import sat_utils
+
 iers.conf.auto_download = False
 
 
@@ -31,19 +33,24 @@ class Satellite_avoid_basis_function(bf.Base_basis_function):
     forecast_time : `float` (90)
         The time ahead to forecast satellite streaks (minutes).
     """
-    def __init__(self, nside=32, forecast_time=90.):
+    def __init__(self, nside=32, forecast_time=90., smooth_fwhm=3.5):
         super().__init__(nside=nside)
         self.forecast_time = forecast_time / 60. / 24  # To days
+        self.smooth_fwhm = np.radians(smooth_fwhm)
 
     def _calc_value(self, conditions, indx=None):
 
         result = 0
         # find the indices that are relevant
-        indx_min = np.searchsorted(conditions.satellite_mjds, conditions.mjd)
-        indx_max = np.searchsorted(conditions.satellite_mjds, conditions.mjd + self.forecast_time)
+        indx_min = np.min(np.searchsorted(conditions.satellite_mjds, conditions.mjd))
+        indx_max = np.max(np.searchsorted(conditions.satellite_mjds, conditions.mjd + self.forecast_time))
 
         if indx_max > indx_min:
             result = np.sum(conditions.satellite_maps[indx_min:indx_max], axis=0)
+            result = hp.smoothing(result, fwhm=self.smooth_fwhm)
+            result = hp.ud_grade(result, self.nside)
+            result[np.where(result < 0)] = 0
+        
 
         return result
 
@@ -464,12 +471,12 @@ def ddf_surveys(detailers=None, season_frac=0.2):
 
 
 def run_sched(surveys, survey_length=365.25, nside=32, fileroot='baseline_', verbose=False,
-              extra_info=None, illum_limit=40.):
+              extra_info=None, illum_limit=40., constellation=None):
     years = np.round(survey_length/365.25)
     scheduler = Core_scheduler(surveys, nside=nside)
     n_visit_limit = None
     filter_sched = simple_filter_sched(illum_limit=illum_limit)
-    observatory = Model_observatory(nside=nside)
+    observatory = Model_observatory(nside=nside, constellation=constellation)
     observatory, scheduler, observations = sim_runner(observatory, scheduler,
                                                       survey_length=survey_length,
                                                       filename=fileroot+'%iyrs.db' % years,
@@ -494,6 +501,11 @@ if __name__ == "__main__":
     parser.add_argument("--gsw", type=float, default=3.0)
     parser.add_argument("--ddf_season_frac", type=float, default=0.2)
     parser.add_argument("--sat_weight", type=float, default=0.)
+    parser.add_argument("--constellation_name", type=str, default="starlink_constellation_v1")
+
+    constellation_name_dict = {"starlink_constellation_v1": "slv1",
+                               "starlink_constellation_v2": "slv2",
+                               "oneweb_constellation": "onew"}
 
     args = parser.parse_args()
     survey_length = args.survey_length  # Days
@@ -506,9 +518,14 @@ if __name__ == "__main__":
     scale = args.rolling_strength
     dbroot = args.dbroot
     gsw = args.gsw
+    constellation_name = args.constellation_name
 
     ddf_season_frac = args.ddf_season_frac
     sat_weight = args.sat_weight
+
+    func = getattr(sat_utils, constellation_name)
+    tles = func()
+    constellation = sat_utils.Constellation(tles)
 
     nside = 32
     per_night = True  # Dither DDF per night
@@ -532,7 +549,7 @@ if __name__ == "__main__":
         fileroot = os.path.basename(sys.argv[0]).replace('.py', '') + '_'
     else:
         fileroot = dbroot + '_'
-    file_end = 'v2.2_'
+    file_end = '%.1f_%s_v2.2_' % (sat_weight, constellation_name_dict[constellation_name])
 
     sm = Sky_area_generator(nside=nside)
 
@@ -547,7 +564,7 @@ if __name__ == "__main__":
 
     repeat_night_weight = None
 
-    observatory = Model_observatory(nside=nside)
+    observatory = Model_observatory(nside=nside, constellation=constellation)
     conditions = observatory.return_conditions()
 
     footprints = make_rolling_footprints(fp_hp=footprints_hp, mjd_start=conditions.mjd_start,
@@ -573,4 +590,4 @@ if __name__ == "__main__":
     surveys = [ddfs, blobs, twi_blobs, greedy]
     run_sched(surveys, survey_length=survey_length, verbose=verbose,
               fileroot=os.path.join(outDir, fileroot+file_end), extra_info=extra_info,
-              nside=nside, illum_limit=illum_limit)
+              nside=nside, illum_limit=illum_limit, constellation=constellation)
