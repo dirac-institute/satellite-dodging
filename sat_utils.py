@@ -299,6 +299,75 @@ class Constellation(object):
                 n_streaks += 1
         return np.degrees(streak_len_rad), n_streaks
 
+    def check_pointings(self, pointing_ras, pointing_decs, mjds, visit_time, fov_radius=1.75):
+        """Just like `check_pointing`, but now use arrays for all the things
+        Parameters
+        ----------
+        pointing_ras : array
+            The RA for each pointing (degrees)
+        pointing_decs : array
+            The dec for each pointing (degres)
+        mjds : array
+            The MJD for the (start) of each pointing (days)
+        visit_time : array
+            The entire time a visit happend (seconds). We'll assume
+        fov_radius : float (1.75)
+            The radius of the science field of view (degrees)
+        """
+
+        # Arrays to hold results
+        lengths_rad = np.zeros(pointing_ras.size, dtype=float)
+        n_streaks = np.zeros(pointing_ras.size, dtype=int)
+
+        input_id_indx_oned = np.arange(pointing_ras.size, dtype=int)
+
+        # Convert everything to radians for internal computations
+        pointing_ras = np.radians(pointing_ras)
+        pointing_decs = np.radians(pointing_decs)
+        fov_radius = np.radians(fov_radius)
+
+        # Note self.paths_array should return an array that is N_sats x N_mjds in shape
+        # And all angles in radians.
+        sat_ra_1, sat_dec_1, sat_alt_1, sat_illum_1 = self.paths_array(mjds)
+        mjd_end = mjds + visit_time/3600./24.
+        sat_ra_2, sat_dec_2, sat_alt_2, sat_illum_2 = self.paths_array(mjd_end)
+
+        # broadcast the pointings to be the same shape as the satellite arrays.
+        pointing_ras = np.broadcast_to(pointing_ras, sat_ra_1.shape)
+        pointing_decs = np.broadcast_to(pointing_decs, sat_ra_1.shape)
+        input_id_indx = np.broadcast_to(input_id_indx_oned, sat_ra_1.shape)
+
+        # Which satellites are above the altitude limit and illuminated
+        # np.where confuses me when used on a 2d array. 
+        above_illum_indx = np.where(((sat_alt_1 > self.alt_limit_rad) | (sat_alt_2 > self.alt_limit_rad)) &
+                                    ((sat_illum_1 == True) | (sat_illum_2 == True)))
+
+        # pointToLineDistance can take arrays, but they all need to be the same shape,
+        # thus why we broadasted pointing ra and dec above.
+        distances = pointToLineDistance(sat_ra_1[above_illum_indx], sat_dec_1[above_illum_indx],
+                                        sat_ra_2[above_illum_indx], sat_dec_2[above_illum_indx],
+                                        pointing_ras[above_illum_indx], pointing_decs[above_illum_indx])
+
+        close = np.where(distances < fov_radius)[0]
+
+        # ok, this is pretty ugly, but should get the job done
+        # Loop over all the potential collisions we have found
+        for sat_ra1, sat_dec1, sat_ra2, sat_dec2, p_ra, p_dec, ob_indx in zip(sat_ra_1[above_illum_indx][close],
+                                                                              sat_dec_1[above_illum_indx][close],
+                                                                              sat_ra_2[above_illum_indx][close],
+                                                                              sat_dec_2[above_illum_indx][close],
+                                                                              pointing_ras[above_illum_indx][close],
+                                                                              pointing_decs[above_illum_indx][close],
+                                                                              input_id_indx[above_illum_indx][close]):
+            length = calculate_length(sat_ra1, sat_dec1, sat_ra2, sat_dec2, p_ra, p_dec, fov_radius)
+            if length > 0:
+                lengths_rad[ob_indx] += length
+                n_streaks[ob_indx] += 1
+        # Since we had degrees in, do degrees out. Probably poor form that we don't have 
+        # uniform behavior over all methods. Maybe change methods that are radians in/out
+        # to have a leading underscore _ in name to make clear.
+        return np.degrees(lengths_rad), n_streaks
+
 
 def calculate_length(initial_alt, initial_az, end_alt, end_az, pointing_alt, pointing_az, radius):
     """Helper funciton for check_pointing. 
