@@ -282,15 +282,18 @@ class Constellation(object):
         self.update_mjd(mjd)
         inAlt_list = self.altitudes_rad + 0
         inAz_list = self.azimuth_rad + 0
+        illum1 = self.visible.copy()
         
         self.update_mjd(mjd+exposure_time)
         finAlt_list = self.altitudes_rad + 0 
         finAz_list = self.azimuth_rad + 0
 
-        for index in self.visible: 
-            distance = pointToLineDistance(inAlt_list[index], inAz_list[index],
-                                           finAlt_list[index], finAz_list[index], 
-                                           pointing_alt, pointing_az)
+        vis_sometime = np.unique(np.hstack([illum1, self.visible]))
+
+        for index in vis_sometime: 
+            distance = pointToLineDistance(inAz_list[index], inAlt_list[index], 
+                                           finAz_list[index], finAlt_list[index], 
+                                           pointing_az, pointing_alt)
 
             if distance < fov_radius:
                 streak_len_rad += calculate_length(inAlt_list[index], inAz_list[index],
@@ -343,7 +346,7 @@ class Constellation(object):
                                     ((sat_illum_1 == True) | (sat_illum_2 == True)))
 
         # pointToLineDistance can take arrays, but they all need to be the same shape,
-        # thus why we broadasted pointing ra and dec above.
+        # thus why we broadcasted pointing ra and dec above.
         distances = pointToLineDistance(sat_ra_1[above_illum_indx], sat_dec_1[above_illum_indx],
                                         sat_ra_2[above_illum_indx], sat_dec_2[above_illum_indx],
                                         pointing_ras[above_illum_indx], pointing_decs[above_illum_indx])
@@ -358,8 +361,8 @@ class Constellation(object):
                                                                               sat_dec_2[above_illum_indx][close],
                                                                               pointing_ras[above_illum_indx][close],
                                                                               pointing_decs[above_illum_indx][close],
-                                                                              input_id_indx[above_illum_indx][close]):
-            length = calculate_length(sat_ra1, sat_dec1, sat_ra2, sat_dec2, p_ra, p_dec, fov_radius)
+                                                                              input_id_indx[above_illum_indx][close]):        
+            length = calculate_length(sat_dec1, sat_ra1, sat_dec2, sat_ra2, p_dec, p_ra, fov_radius)
             if length > 0:
                 lengths_rad[ob_indx] += length
                 n_streaks[ob_indx] += 1
@@ -394,9 +397,9 @@ def calculate_length(initial_alt, initial_az, end_alt, end_az, pointing_alt, poi
         the length of the satellite streak in the pointing (radians)
     """
     #start location 
-    x1,y1=gnomonic_project_toxy(initial_alt, initial_az, pointing_alt, pointing_az)
+    x1,y1=gnomonic_project_toxy(initial_az, initial_alt, pointing_az, pointing_alt)
     #end location
-    x2,y2=gnomonic_project_toxy(end_alt, end_az, pointing_alt, pointing_az)
+    x2,y2=gnomonic_project_toxy(end_az, end_alt, pointing_az, pointing_alt)
 
     # create your two points
     point_1 = geometry.Point(x1, y1)
