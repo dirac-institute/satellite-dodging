@@ -52,9 +52,11 @@ def pointToLineDistance(lon1, lat1, lon2, lat2, lon3, lat3):
         if diff > (np.pi / 2):
             return dis13
     else:
+        over = np.where(diff > np.pi)
+        diff[over] = 2*np.pi - diff[over]
         solved = np.where(diff > (np.pi / 2))[0]
         result[solved] = dis13[solved]
-        needed[solved] = 0
+        needed[solved] = False
     
     # Find the cross-track distance.
     dxt = np.arcsin(np.sin(dis13) * np.sin(bear13 - bear12))
@@ -66,8 +68,9 @@ def pointToLineDistance(lon1, lat1, lon2, lat2, lon3, lat3):
         if dis14 > dis12:
             return _angularSeparation(lon2, lat2, lon3, lat3)
     else:
-        solved = np.where(dis14 > dis12)[0]
+        solved = np.where((dis14 > dis12) & needed)[0]
         result[solved] = _angularSeparation(lon2[solved], lat2[solved], lon3[solved], lat3[solved])
+        needed[solved] = False
 
     if np.size(lon1) == 1:
         return np.abs(dxt)
