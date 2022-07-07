@@ -2,6 +2,9 @@
 
 # originally from https://github.com/lsst-sims/sims_featureScheduler_runs2.2/tree/main/baseline
 
+# Update to add the Satellite_avoid_basis_function to relevant survey objects
+# and use our updated Model_observatory that sends over satellite streak prediction maps.
+
 import numpy as np
 import matplotlib.pylab as plt
 import healpy as hp
@@ -18,9 +21,9 @@ import subprocess
 import os
 import argparse
 from make_ddf_survey import generate_ddf_scheduled_obs
+import sat_utils
 # So things don't fail on hyak
 from astropy.utils import iers
-import sat_utils
 
 iers.conf.auto_download = False
 
