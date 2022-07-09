@@ -302,7 +302,8 @@ class Constellation(object):
                 n_streaks += 1
         return np.degrees(streak_len_rad), n_streaks
 
-    def check_pointings(self, pointing_ras, pointing_decs, mjds, visit_time, fov_radius=1.75):
+    def check_pointings(self, pointing_ras, pointing_decs, mjds,
+                        visit_time, fov_radius=1.75, test_radius=1.75, dt=5.):
         """Just like `check_pointing`, but now use arrays for all the things
         Parameters
         ----------
@@ -316,7 +317,15 @@ class Constellation(object):
             The entire time a visit happend (seconds). We'll assume
         fov_radius : float (1.75)
             The radius of the science field of view (degrees)
+        test_radius : float (20.)
+            The radius to use to see if a streak gets close (degrees). Need to set large
+            because satellites can be moving at ~1 deg/s
+        dt : float (5)
+            The timestep to use for high resolution checking if a satellite crossed
         """
+        test_radius = np.radians(test_radius)
+        dt = dt/3600/24  # to days
+        visit_time = visit_time/3600./24.
 
         # Arrays to hold results
         lengths_rad = np.zeros(pointing_ras.size, dtype=float)
@@ -332,7 +341,7 @@ class Constellation(object):
         # Note self.paths_array should return an array that is N_sats x N_mjds in shape
         # And all angles in radians.
         sat_ra_1, sat_dec_1, sat_alt_1, sat_illum_1 = self.paths_array(mjds)
-        mjd_end = mjds + visit_time/3600./24.
+        mjd_end = mjds + visit_time
         sat_ra_2, sat_dec_2, sat_alt_2, sat_illum_2 = self.paths_array(mjd_end)
 
         # broadcast the pointings to be the same shape as the satellite arrays.
@@ -351,18 +360,38 @@ class Constellation(object):
                                         sat_ra_2[above_illum_indx], sat_dec_2[above_illum_indx],
                                         pointing_ras[above_illum_indx], pointing_decs[above_illum_indx])
 
-        close = np.where(distances < fov_radius)[0]
+        close = np.where(distances < test_radius)[0]
+
+        sat_indx = np.arange(len(self.sat_list), dtype=int)
+
+        sat_indx = np.tile(sat_indx, sat_ra_1.shape[1]).reshape(sat_ra_1.shape)
+
+        mjd_broad = np.broadcast_to(mjds, sat_ra_1.shape)[above_illum_indx][close]
+        visit_broad = np.broadcast_to(visit_time, sat_ra_1.shape)[above_illum_indx][close]
 
         # ok, this is pretty ugly, but should get the job done
         # Loop over all the potential collisions we have found
-        for sat_ra1, sat_dec1, sat_ra2, sat_dec2, p_ra, p_dec, ob_indx in zip(sat_ra_1[above_illum_indx][close],
-                                                                              sat_dec_1[above_illum_indx][close],
-                                                                              sat_ra_2[above_illum_indx][close],
-                                                                              sat_dec_2[above_illum_indx][close],
-                                                                              pointing_ras[above_illum_indx][close],
-                                                                              pointing_decs[above_illum_indx][close],
-                                                                              input_id_indx[above_illum_indx][close]):        
-            length = calculate_length(sat_dec1, sat_ra1, sat_dec2, sat_ra2, p_dec, p_ra, fov_radius)
+        #for p_ra, p_dec, ob_indx, mjd, vt, sat_in in zip(pointing_ras[above_illum_indx][close],
+        #                                                   pointing_decs[above_illum_indx][close],
+        #                                                   input_id_indx[above_illum_indx][close],
+        #                                                   mjd_broad, visit_broad,
+        #                                                   sat_indx[above_illum_indx][close]):
+        #    mjd = np.linspace(mjd, mjd+vt, num=np.round(vt/dt).astype(int))
+        #    jd = mjd + MJDOFFSET
+        #    t = self.ts.ut1_jd(jd)
+        #    sat = self.sat_list[sat_in]
+        #    current_sat = sat.at(t)
+        #    topo = current_sat - self.observatory_site.at(t)
+        #    sat_ra, sat_dec, _distance = topo.radec()
+
+        for p_ra, p_dec, ob_indx, sat_ra1, sat_dec1,sat_ra2, sat_dec2 in zip(pointing_ras[above_illum_indx][close],
+                                                           pointing_decs[above_illum_indx][close],
+                                                           input_id_indx[above_illum_indx][close],
+                                                           sat_ra_1[above_illum_indx][close], sat_dec_1[above_illum_indx][close],
+                                                           sat_ra_2[above_illum_indx][close], sat_dec_2[above_illum_indx][close]):
+
+            #length = streak_length(sat_ra, sat_dec, p_ra, p_dec, fov_radius)
+            length = streak_length([sat_ra1,sat_ra2], [sat_dec1, sat_dec2], p_ra, p_dec, fov_radius)
             if length > 0:
                 lengths_rad[ob_indx] += length
                 n_streaks[ob_indx] += 1
@@ -371,6 +400,17 @@ class Constellation(object):
         # to have a leading underscore _ in name to make clear.
         return np.degrees(lengths_rad), n_streaks
 
+
+def streak_length(sat_ras, sat_decs, pointing_ra, pointing_dec, radius):
+    """all radians
+    """
+    # Hopefully this broadcasts properly
+    x, y = gnomonic_project_toxy(sat_ras, sat_decs, pointing_ra, pointing_dec)
+    ls = LineString(zip(x, y))
+    p = Point(0, 0)
+    circle_buffer = p.buffer(radius)
+    length = circle_buffer.intersection(ls).length
+    return length
 
 def calculate_length(initial_alt, initial_az, end_alt, end_az, pointing_alt, pointing_az, radius):
     """Helper funciton for check_pointing. 
@@ -401,31 +441,11 @@ def calculate_length(initial_alt, initial_az, end_alt, end_az, pointing_alt, poi
     #end location
     x2,y2=gnomonic_project_toxy(end_az, end_alt, pointing_az, pointing_alt)
 
-    # create your two points
-    point_1 = geometry.Point(x1, y1)
-    point_2 = geometry.Point(x2, y2)
-    
     #from https://stackoverflow.com/questions/30844482/what-is-most-efficient-way-to-find-the-intersection-of-a-line-and-a-circle-in-py
     p = Point(0, 0)
-    circle = p.buffer(radius).boundary
     circle_buffer=p.buffer(radius)
-    line = LineString([(x1,y1), (x2,y2)])
-    intersection = circle.intersection(line)
-    try:
-        if circle_buffer.contains(point_1) and circle_buffer.contains(point_2): 
-            len=np.sqrt((x1-x2)**2+(y1-y2)**2)
-        elif circle_buffer.contains(point_1):
-            x_2=intersection.coords[0][0]
-            y_2=intersection.coords[0][1]
-            len=np.sqrt((x1-x_2)**2+(y1-y_2)**2)
-        elif circle_buffer.contains(point_2):
-            x_1=intersection.coords[0][0]
-            y_1=intersection.coords[0][1]
-            len=np.sqrt((x_1-x2)**2+(y_1-y2)**2)
-        else:  
-            p1=intersection.geoms[0].coords[0]
-            p2=intersection.geoms[1].coords[0]
-            len=np.sqrt((p1[0]-p2[0])**2+(p1[1]-p2[1])**2)
-        return len 
-    except:
-        return 0
+    ls = LineString([(x1,y1), (x2,y2)])
+    circle_buffer = p.buffer(radius)
+    length = circle_buffer.intersection(ls).length
+    return length
+    
