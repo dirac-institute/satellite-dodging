@@ -1,11 +1,10 @@
 import numpy as np
-from rubin_sim.utils import gnomonic_project_toxy, _angularSeparation, Site
+from rubin_sim.utils import gnomonic_project_toxy, Site
 from skyfield.api import load, wgs84, EarthSatellite
 from astropy import units as u
 from astropy import constants as const
 from part1 import pointToLineDistance
 from shapely.geometry import LineString, Point
-from shapely import geometry
 
 
 MJDOFFSET = 2400000.5
@@ -302,8 +301,9 @@ class Constellation(object):
                 n_streaks += 1
         return np.degrees(streak_len_rad), n_streaks
 
+
     def check_pointings(self, pointing_ras, pointing_decs, mjds,
-                        visit_time, fov_radius=1.75, test_radius=1.75, dt=5.):
+                        visit_time, fov_radius=1.75, test_radius=10., dt=2.):
         """Just like `check_pointing`, but now use arrays for all the things
         Parameters
         ----------
@@ -317,10 +317,10 @@ class Constellation(object):
             The entire time a visit happend (seconds). We'll assume
         fov_radius : float (1.75)
             The radius of the science field of view (degrees)
-        test_radius : float (20.)
+        test_radius : float (10.)
             The radius to use to see if a streak gets close (degrees). Need to set large
             because satellites can be moving at ~1 deg/s
-        dt : float (5)
+        dt : float (2)
             The timestep to use for high resolution checking if a satellite crossed
         """
         test_radius = np.radians(test_radius)
@@ -362,36 +362,29 @@ class Constellation(object):
 
         close = np.where(distances < test_radius)[0]
 
-        sat_indx = np.arange(len(self.sat_list), dtype=int)
-
-        sat_indx = np.tile(sat_indx, sat_ra_1.shape[1]).reshape(sat_ra_1.shape)
+        # Numpy broadcasting is such a dark art
+        sat_indx = np.arange(len(self.sat_list), dtype=int)[np.newaxis]
+        sat_indx = np.broadcast_to(sat_indx.T, sat_ra_1.shape)
 
         mjd_broad = np.broadcast_to(mjds, sat_ra_1.shape)[above_illum_indx][close]
         visit_broad = np.broadcast_to(visit_time, sat_ra_1.shape)[above_illum_indx][close]
 
         # ok, this is pretty ugly, but should get the job done
         # Loop over all the potential collisions we have found
-        #for p_ra, p_dec, ob_indx, mjd, vt, sat_in in zip(pointing_ras[above_illum_indx][close],
-        #                                                   pointing_decs[above_illum_indx][close],
-        #                                                   input_id_indx[above_illum_indx][close],
-        #                                                   mjd_broad, visit_broad,
-        #                                                   sat_indx[above_illum_indx][close]):
-        #    mjd = np.linspace(mjd, mjd+vt, num=np.round(vt/dt).astype(int))
-        #    jd = mjd + MJDOFFSET
-        #    t = self.ts.ut1_jd(jd)
-        #    sat = self.sat_list[sat_in]
-        #    current_sat = sat.at(t)
-        #    topo = current_sat - self.observatory_site.at(t)
-        #    sat_ra, sat_dec, _distance = topo.radec()
+        for p_ra, p_dec, ob_indx, mjd, vt, sat_in in zip(pointing_ras[above_illum_indx][close],
+                                                         pointing_decs[above_illum_indx][close],
+                                                         input_id_indx[above_illum_indx][close],
+                                                         mjd_broad, visit_broad,
+                                                         sat_indx[above_illum_indx][close]):
+            mjd = np.linspace(mjd, mjd+vt, num=np.round(vt/dt).astype(int))
+            jd = mjd + MJDOFFSET
+            t = self.ts.ut1_jd(jd)
+            sat = self.sat_list[sat_in]
+            current_sat = sat.at(t)
+            topo = current_sat - self.observatory_site.at(t)
+            sat_ra, sat_dec, _distance = topo.radec()
 
-        for p_ra, p_dec, ob_indx, sat_ra1, sat_dec1,sat_ra2, sat_dec2 in zip(pointing_ras[above_illum_indx][close],
-                                                           pointing_decs[above_illum_indx][close],
-                                                           input_id_indx[above_illum_indx][close],
-                                                           sat_ra_1[above_illum_indx][close], sat_dec_1[above_illum_indx][close],
-                                                           sat_ra_2[above_illum_indx][close], sat_dec_2[above_illum_indx][close]):
-
-            #length = streak_length(sat_ra, sat_dec, p_ra, p_dec, fov_radius)
-            length = streak_length([sat_ra1,sat_ra2], [sat_dec1, sat_dec2], p_ra, p_dec, fov_radius)
+            length = streak_length(sat_ra.radians, sat_dec.radians, p_ra, p_dec, fov_radius)
             if length > 0:
                 lengths_rad[ob_indx] += length
                 n_streaks[ob_indx] += 1
@@ -411,6 +404,7 @@ def streak_length(sat_ras, sat_decs, pointing_ra, pointing_dec, radius):
     circle_buffer = p.buffer(radius)
     length = circle_buffer.intersection(ls).length
     return length
+
 
 def calculate_length(initial_alt, initial_az, end_alt, end_az, pointing_alt, pointing_az, radius):
     """Helper funciton for check_pointing. 
