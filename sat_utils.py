@@ -13,6 +13,15 @@ MJD0 = (
 )
 
 
+def sun_alt_limits():
+    """For different constellations, expect zero illuminated satellites above 20 degree altitude
+    if the sun is below the limits (degrees)
+    """
+    # Estimated in sun_alts_limits.ipynb
+    result = {'slv1': -36., 'slv2': -36., 'oneweb': -53.}
+    return result
+
+
 def satellite_mean_motion(altitude, mu=const.GM_earth, r_earth=const.R_earth):
     """
     Compute mean motion of satellite at altitude in Earth's gravitational field.
