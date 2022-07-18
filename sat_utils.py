@@ -25,7 +25,6 @@ def sun_alt_limits():
 def satellite_mean_motion(altitude, mu=const.GM_earth, r_earth=const.R_earth):
     """
     Compute mean motion of satellite at altitude in Earth's gravitational field.
-
     See https://en.wikipedia.org/wiki/Mean_motion#Formulae
     """
     no = np.sqrt(4.0 * np.pi**2 * (altitude + r_earth) ** 3 / mu).to(u.day)
@@ -37,7 +36,6 @@ def tle_from_orbital_parameters(
 ):
     """
     Generate TLE strings from orbital parameters.
-
     Note: epoch has a very strange format: first two digits are the year, next three
     digits are the day from beginning of year, then fraction of a day is given, e.g.
     20180.25 would be 2020, day 180, 6 hours (UT?)
@@ -171,7 +169,6 @@ def oneweb_constellation():
 class Constellation(object):
     """
     Have a class to hold satellite constellation
-
     Parameters
     ----------
     sat_tle_list : list of str
@@ -207,7 +204,6 @@ class Constellation(object):
     def update_mjd(self, mjd):
         """
         Record the alt,az position and illumination status for all the satellites at a given time
-
         XXX--need to update so this will work with an array of MJD values, so we can avoid mjd loops.
         """
         jd = mjd + MJDOFFSET
