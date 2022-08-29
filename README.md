@@ -15,6 +15,7 @@ Files:
 * satellite_util_examples.ipynb: contains plots with satellite simulations 
 * scheduler_examples.ipynb: contains plots with scheduler simulations 
 * find_streak_len.py: contains the executable file for calculating streak length and testing dodging efficiency for simulations 
+* see utils for methods, including calculate streak length 
 
 
 
