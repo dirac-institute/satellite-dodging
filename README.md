@@ -11,11 +11,11 @@ As usual, suggest using anaconda and creating a fresh environement for installin
 
 Files: 
 * Compare_sim_runs.ipynb: contains all result plots, including evaluation of dodging efficiency, number of missed exposures, and trade-off between pixel loss and coadded depth. 
-* compare_methods.ipynb: contains testing of the satellite streak length method and speed optimization testing 
+* test.ipynb & compare_methods.ipynb: contains testing of the satellite streak length method and speed optimization testing 
 * satellite_util_examples.ipynb: contains plots with satellite simulations 
 * scheduler_examples.ipynb: contains plots with scheduler simulations 
 * find_streak_len.py: contains the executable file for calculating streak length and testing dodging efficiency for simulations 
-* see utils for methods, including calculate streak length 
+* see utils for methods, including calculate streak length methods 
 
 
 
